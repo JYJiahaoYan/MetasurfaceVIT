@@ -1,0 +1,6 @@
+.DS_Store
+*.pyc
+*/finetune_output/
+*/output/
+__pycache__/
+.idea/
