@@ -1,0 +1,124 @@
+# this code utilizes the pre-built grating_s_parameters analysis group.
+# how to run it? 
+# first, make sure "unit_xx_xx_xx.txt" and "param_for_FDTD" exist.
+# second, open prebuilt.fsp and then open unit_script.lsf from script file editor.
+# run unit_script.lsf, and you will get "T0_unit_xx_xx_xx.txt" and 
+# "phase_unit_xx_xx_xx.txt"
+
+switchtolayout;
+clear;clearanalysis;
+
+################
+#notice: please manually specify the unitxxx.txt, since fdtd can't read string input
+################
+unit_path = "unit_40_200_20.txt";
+
+nm=1e-9;
+param=readdata("param_for_FDTD.txt");
+count=param(1, 1);
+lambda_start= param(1, 2)*nm;
+lambda_stop = param(1, 3)*nm;
+points = param(1, 4);
+height = param(1, 5)*nm;
+x=readdata(unit_path);
+
+
+setglobalmonitor("frequency points",points);
+# todo add analysis group
+select("grating_s_params");
+set("start wavelength",lambda_start);
+set("stop wavelength",lambda_stop);
+
+
+# delete command may raise warning if using prebuilt.fsp for the first time, 
+# just ignore it
+select("FDTD");
+delete;
+addfdtd;
+set("dimension",2);#2 means 3D simulation
+set("x min bc","Periodic");
+set("y min bc","Periodic");
+
+select("substrate");
+delete;
+addrect;
+set("name","substrate");
+set("material","SiO2 (Glass) - Palik");
+
+
+# mesh
+select("mesh");
+delete;
+addmesh;
+set("set maximum mesh step",1);
+set("x",0);
+set("x span",800*nm);
+set("y",0);
+set("y span",800*nm);
+
+mat_sub = getnamed("substrate","material");
+n1= getfdtdindex(mat_sub,c/lambda_stop,c/lambda_stop,c/lambda_stop);
+n2 = getnamed("FDTD","index");
+
+for(i=1:count){
+    ?i;
+    switchtolayout;
+    select("rect");
+    delete;
+    addrect;
+    set("name","rect");
+    set("x",0);
+    set("y",0);
+    set("z max",height);
+    set("z min",0);
+    set("material","Si (Silicon) - Palik");    
+    set("x span",x(i,2)*nm);
+    set("y span",x(i,3)*nm);
+    
+    # set simulation region
+    select("FDTD");
+    set("x",0);set("y",0);
+    set("x span",(x(i,2)+300)*nm); 
+    set("y span",(x(i,3)+300)*nm);
+    set("z max",0.5*lambda_stop/n2+height);
+    set("z min",-0.5*lambda_stop/n1); # half-wavelength gap between pml and structure interface  
+    
+    select("substrate");
+    set("x",0);set("y",0);
+    set("x span",(x(i,2)+300)*nm*2);
+    set("y span",(x(i,3)+300)*nm*2);
+    set("z max",0);
+    set("z min",-2*lambda_stop/n1);
+    
+    # set s_params
+    select("grating_s_params");
+    set("metamaterial span",height);
+    set("metamaterial center",height/2);
+    set("x",0);set("y",0);
+    set("x span",2*(x(i,2)+300)*nm);
+    set("y span",2*(x(i,3)+300)*nm);
+    set("z span",0.5*lambda_stop/n2+0.5*lambda_stop/n1+height);
+    set("z",0.25*lambda_stop*(1/n2-1/n1)+0.5*height);
+    
+    select("mesh");
+    set("z max",height);
+    set("z min",0);
+    set("x span",x(i,2)*nm);
+    set("y span",x(i,3)*nm);
+    set("dx",x(i,2)*nm/30);
+    set("dy",x(i,3)*nm/30);
+    set("dz",height/30);
+    
+    run;
+    
+    S=getresult("grating_s_params","S");
+    T=getresult("grating_s_params","T");
+    phase = angle(S.S21_Gn); # suppose to be 1xn matrix/ n means frequency points
+    phase=transpose(phase);
+    write("phase_" + unit_path, num2str(phase));
+    
+    T0=T.T_Gn;
+    T0=transpose(T0);
+    write("T0_" + unit_path, num2str(T0));
+    }
+   

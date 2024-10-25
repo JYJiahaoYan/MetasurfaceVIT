@@ -1,0 +1,168 @@
+########## notice1: 
+# before run this code, make sure you have run lens_construct.lsf and 
+# generate construct.fsp
+########## notice2:
+# lens_simulate is based on single-wavelength.
+# You need to assign wavelength (nm) manually.
+# check dataset files e.g. preprocess\finetune_data_1\real_wavelengths.txt
+nm=1e-9;
+lambda=514*nm;
+########### notice 3:
+# manually input the focus length, which should be consistent with your design in evaluation\metasurface_design
+fl = 70000 * nm; 
+
+########### notice 4:
+# to switch wavelength, you need to manually delete non-structural objects
+# (including fdtd, source, field, 2d_polygon) and run this script again.
+
+
+
+# step 1: establish boudaries, fdtd, source...
+load("construct.fsp");
+switchtolayout;
+
+period = readdata("final_pitch.txt");
+para = readdata("final_para.txt");  
+periodX = period(1)*nm;
+periodY = period(2)*nm;
+count = sqrt(length(para)/ 6);
+
+# since periodX is twice as periodY, to make a circle, radius should depend on shorter direction.
+len_radius = periodY * count / 2;
+
+addfdtd;
+set("dimension",2);
+set("x min bc","Anti-Symmetric");
+set("y min bc","Symmetric");
+set("x",0);set("y",0);
+set("x span",len_radius * 2 + 4000 * nm); 
+set("y span",len_radius * 2 + 4000 * nm);
+set("z max",450 * nm + 300 * nm);
+set("z min",-300 * nm);  
+
+
+## mesh
+#addmesh;
+#set("set maximum mesh step",1);
+#set("x",0);
+#set("x span",800*nm);
+#set("y",0);
+#set("y span",800*nm);
+
+# add plane wave
+addplane;
+set("injection axis","z");
+set("direction","forward");
+set("x",0);
+set("x span",len_radius * 4);
+set("y",0);
+set("y span",len_radius * 4);
+set("z",-150 * nm);
+set("wavelength start",lambda);
+set("wavelength stop",lambda);
+# add Z monitors
+addpower;
+set("name","field");
+set("monitor type","2D Z-normal");
+set("x",0);
+set("x span",len_radius * 2 + 7000 * nm);
+set("y",0);
+set("y span",len_radius * 2 + 7000 * nm);
+set("z",450 * nm + 65 * nm);
+set("output power",1);
+set("output Ex",1);
+set("output Ey",1);
+set("output Ez",1);
+set("output Hx",1);
+set("output Hy",1);
+set("output Hz",1);
+set("output Px",0);
+set("output Py",0);
+set("output Pz",0);
+set("override global monitor settings",1);
+set("frequency points",1);
+
+# aperture
+vtx = readdata("aperture.txt");
+add2dpoly;
+set("name","2D_polygon");
+set("surface normal",3); #  1 = x (normal), 2 = y (normal), 3 = z (normal)
+set("vertices",vtx);
+set("z",-50 * nm);
+set("y", 0);
+set("x", 0);
+set("material", "PEC (Perfect Electrical Conductor)");
+
+run;
+
+############################
+# Part 1: phase of nearfield
+############################
+R = len_radius
+E = getresult("field","E");
+x = E.x;
+y = E.y;
+ind = find(x,[-R,R]); # limit the x range for plot
+ind = ind(1):ind(2);
+x = x(ind);
+phase = angle(pinch(E.Ex));
+phase_x = pinch(phase,2,find(y,0));
+phase_x = phase_x(ind);
+phase_x = phase_x-min(phase_x);
+phase_target = 2*pi/ E.lambda*(fl-sqrt(x^2+fl^2)); # Hyperbolic lens is assumed
+phase_target = phase_target-min(phase_target);
+plot(x*1e6,mod(unwrap(phase_x),2*pi),phase_target,"x (um)","Phase (rad)","","linewidth=2");
+setplot("x max",R*1e6); setplot("x min",-R*1e6);
+legend("Simulation","Target");
+
+##################
+# Part 2: farfield
+##################
+
+# downsample the near field to speed up far field projections
+# this is appropriate for metalens applications where there is no evanescent near field
+farfieldsettings("override near field mesh",true);
+farfieldsettings("near field samples per wavelength",2); # at Nyquist limit
+
+# choose area to plot and spatial resolution
+x = linspace(-12e-6,12e-6,400);
+y = linspace(-12e-6,12e-6,100);
+z = linspace(2e-6,200e-6,400);
+
+# farfield along z axis
+E2_z = farfieldexact3d('field',0,0,z);
+E2_z = pinch(sum(abs(E2_z)^2,4));
+
+plot(z*1e6,E2_z,'z (um)','|E|^2 (V^2/m^2)','Farfield along z-axis','linewidth=2');
+legend("");
+
+#find focal plane
+ind = find(E2_z,max(E2_z));
+zm = z(ind);
+
+# farfield in x diirection at the focal point (x=0,y=0,z=zm)
+E2_x = farfieldexact3d('field',x,0,zm);
+E2_x = pinch(sum(abs(E2_x)^2,4));
+plot(x*1e6,E2_x,'x (um)','|E|^2 (V^2/m^2)','Farfield at focal plane','linewidth=2');
+legend("");
+# farfield in y diirection at the focal point (x=0,y=0,z=zm)
+E2_y = farfieldexact3d('field',0,y,zm);
+E2_y = pinch(sum(abs(E2_y)^2,4));
+plot(y*1e6,E2_y,'y (um)','|E|^2 (V^2/m^2)','Farfield at focal plane','linewidth=2');
+legend("");
+
+# plot E field intensity profile as a function of x,y
+E2_xz = farfieldexact3d('field',x,0,z);
+E2_xz = pinch(sum(abs(E2_xz)^2,4));
+image(x*1e6,z*1e6,E2_xz,'x (um)','z (um)','|E|^2 (x-z plane)');
+
+E2_xy = farfieldexact3d('field',x,y,zm);
+E2_xy = pinch(sum(abs(E2_xy)^2,4));
+image(x*1e6,y*1e6,E2_xy,'x (um)','y (um)','|E|^2 (x-y plane)');
+
+## Save farfield intensity to mat file
+matlabsave("E_far.mat",x,y,z,E2_x,E2_y,E2_z,E2_xy,E2_xz);
+
+
+
+
