@@ -15,7 +15,7 @@ By [Jiahao Yan](mailto:yjh20xy@gmail.com)
 
 # Commit History
 1) Oct 25 2024: Upload the project and ensure that small data size with basic settings are runnable
-2) tbd
+2) Apr 18 2025: Update readme with main results.
 
 ## Project Structure
 ```commandline
@@ -87,21 +87,25 @@ E:\METASURFACEVIT-MAIN
 
 ## Main Results
 
-### type1: single-wavelength multi-polarization display and hologram
+### Design of wavelength-dependent Jones Matrix & Masking Strategy
 
-**tbd**
+![figure 1](figures/presentation/fig1.png)
 
-### type2: multi-wavelength multi-polarization display and hologram
+### Workflow of Pretrain, Design, and Reconstruction
 
-**tbd**
+![figure 2](figures/presentation/fig2.png)
 
-### type3: RGB three channels display and hologram
+### Workflow of Finetuning, Prediction, and Evaluation
 
-**tbd**
+![figure 3](figures/presentation/fig3.png)
 
-### type4: broadband (covering visible wavelengths) metalens
+### Example Application 1: Multiplexing of printings and holograms
 
-**tbd**
+![figure 4](figures/presentation/fig4.png)
+
+### Example Application 2: Broadband achormatic metalens
+
+![figure 5](figures/presentation/fig5.png)
 
 
 ## Getting Started
